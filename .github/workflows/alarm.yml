@@ -1,0 +1,31 @@
+# 쓰레드 스튜디오 예약 발행 알람: 5분마다 연결 서버에 "곧 올릴 예약 글 있으면 깨워" 신호만 보낸다.
+# 서버 주소(비밀 키 포함)는 저장소 비밀값 TICK_URL에만 있다.
+name: alarm
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "17 3 1 * *"   # 매달 1일: 저장소가 60일 쉬면 GitHub가 알람을 끄므로 기록 한 줄 남김
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: wake scheduled posts
+        env:
+          TICK_URL: ${{ secrets.TICK_URL }}
+        run: |
+          curl -fsS -m 60 -o /dev/null -X POST "$TICK_URL" -H 'content-type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"threads_tick","arguments":{}}}'
+  keepalive:
+    if: github.event.schedule == '17 3 1 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u +%FT%TZ > .keepalive
+          git config user.name "alarm" && git config user.email "alarm@users.noreply.github.com"
+          git add .keepalive && git commit -m "keepalive" && git push
